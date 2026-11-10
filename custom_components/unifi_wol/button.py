@@ -93,6 +93,7 @@ class UnifiWolButton(CoordinatorEntity[UnifiWolCoordinator], ButtonEntity):
             "network": network.name if network else None,
             "vlan": network.vlan if network else None,
             "online": client.online if client else None,
+            "wired": client.wired if client else None,
         }
         if self._last_result:
             attrs["last_interface"] = self._last_result.interface

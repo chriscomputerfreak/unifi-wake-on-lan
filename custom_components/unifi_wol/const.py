@@ -9,6 +9,7 @@ CONF_SSH_PORT = "ssh_port"
 CONF_SSH_USERNAME = "ssh_username"
 CONF_SSH_PASSWORD = "ssh_password"
 CONF_SSH_HOST_KEY = "ssh_host_key"
+CONF_TLS_FINGERPRINT = "tls_fingerprint"
 CONF_TARGETS = "targets"
 CONF_RETRUST_HOST_KEY = "retrust_host_key"
 
@@ -17,6 +18,9 @@ DEFAULT_SSH_PORT = 22
 DEFAULT_SSH_USERNAME = "root"
 
 UPDATE_INTERVAL = timedelta(minutes=5)
+
+# Repair issue raised when the SSH host key or the TLS certificate changed
+ISSUE_FINGERPRINT_CHANGED = "fingerprint_changed"
 
 SERVICE_WAKE = "wake"
 ATTR_MAC = "mac"

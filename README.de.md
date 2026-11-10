@@ -27,9 +27,14 @@ Voraussetzungen auf dem Gateway:
 
 Dann *Einstellungen → Geräte & Dienste → Integration hinzufügen → UniFi Wake-on-LAN*:
 
-1. Controller: Host (z. B. `192.168.1.1`), Benutzer, Passwort, Site (`default`).
+1. Controller: Host (z. B. `192.168.1.1`), Benutzer, Passwort, Site (`default`). Ist „SSL-Zertifikat prüfen“ aus (Standard für das selbstsignierte Zertifikat), wird der Fingerabdruck des Zertifikats beim ersten Verbinden fest hinterlegt.
 2. SSH: Port 22, Benutzer `root`, SSH-Passwort. Der Hostkey wird beim ersten Verbinden fest hinterlegt (Schutz gegen MITM).
-3. Unter **Konfigurieren** die Clients auswählen, die einen Button **„Aufwecken“** bekommen sollen.
+3. Unter **Konfigurieren** die Clients auswählen, die einen Button **„Aufwecken“** bekommen sollen. ● online, ○ offline, 📶 WLAN-Client (WoL klappt über WLAN selten).
+
+### Später etwas ändern
+
+- **Neu konfigurieren** (Menü ⋮ am Eintrag): Host, Zugangsdaten, Site oder SSH-Einstellungen ändern. Ausgewählte Clients und Entitäts-IDs bleiben erhalten; leere Passwortfelder behalten die gespeicherten Passwörter.
+- **Neu anmelden**: Lehnt der Controller oder das Gateway die gespeicherten Zugangsdaten ab, fragt Home Assistant nach den neuen Passwörtern.
 
 ## Nutzung
 
@@ -55,9 +60,12 @@ response_variable: result   # {mac, interface, method}
     logs:
       custom_components.unifi_wol: debug
   ```
-- *Hostkey hat sich geändert* (z. B. nach Reset des Gateways): In den Optionen „SSH-Hostkey neu einlesen“ anhaken.
+- *Hostkey oder Zertifikat hat sich geändert* (z. B. nach Reset des Gateways): Unter *Einstellungen → Reparaturen* erscheint ein Hinweis. Er zeigt die gespeicherten und die neuen SHA256-Fingerabdrücke und übernimmt die neuen erst nach deiner Bestätigung. Dasselbe geht in den Optionen („SSH-Hostkey und Zertifikat neu einlesen und vertrauen“).
+- Für GitHub-Issues bitte **Diagnosedaten herunterladen** (Menü ⋮ am Eintrag). Passwörter und Benutzernamen werden entfernt, MAC- und IP-Adressen gekürzt.
 - Firmware-Updates können die verfügbaren Tools ändern. Welche Methode benutzt wurde, steht im Log und im Attribut `last_method`.
 
 ## Sicherheit
 
 Das SSH-Passwort ist ein Root-Zugang zum Gateway und liegt (wie alle Zugangsdaten von Integrationen) in `.storage/core.config_entries`. Die Integration führt nur `ip -o -4 addr show` und das Wake-Skript aus; alle Werte werden per `shlex.quote` maskiert.
+
+Beide Verbindungen werden beim ersten Verbinden festgelegt: der SSH-Hostkey und, solange die CA-Prüfung aus ist, das TLS-Zertifikat des Controllers. Ein geänderter Schlüssel oder ein geändertes Zertifikat wird nie stillschweigend übernommen. SSH-Schlüssel statt Passwort werden bewusst nicht unterstützt, weil UniFi OS `authorized_keys` bei Firmware-Updates löscht.

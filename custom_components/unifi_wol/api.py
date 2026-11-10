@@ -9,14 +9,17 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+import hashlib
 import ipaddress
 import logging
 import re
 import shlex
+import ssl
 from typing import Any
 
 import aiohttp
 import asyncssh
+from yarl import URL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -48,8 +51,50 @@ class HostKeyMismatch(UnifiWolError):
     """The gateway presented an unexpected SSH host key."""
 
 
+class CertificateMismatch(UnifiWolError):
+    """The controller presented an unexpected TLS certificate."""
+
+
 class WakeFailed(UnifiWolError):
     """Sending the magic packet failed."""
+
+
+def ssh_fingerprint(host_key: str) -> str:
+    """Return the SHA256 fingerprint of an OpenSSH public key (like ssh-keygen -l)."""
+    return str(asyncssh.import_public_key(host_key).get_fingerprint("sha256"))
+
+
+def format_tls_fingerprint(fingerprint: str) -> str:
+    """Format a hex SHA256 certificate fingerprint like browsers do (AB:CD:...)."""
+    value = fingerprint.upper()
+    return ":".join(value[i : i + 2] for i in range(0, len(value), 2))
+
+
+async def async_fetch_tls_fingerprint(host: str) -> str:
+    """Return the SHA256 fingerprint (hex) of the controller's TLS certificate."""
+    url = URL(f"https://{host}")
+    # No CA verification: this is used to pin self-signed certificates.
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    try:
+        _, writer = await asyncio.wait_for(
+            asyncio.open_connection(url.host, url.port or 443, ssl=context),
+            API_TIMEOUT.total,
+        )
+    except (OSError, ssl.SSLError, TimeoutError) as err:
+        raise CannotConnect(str(err) or type(err).__name__) from err
+    try:
+        cert = writer.get_extra_info("ssl_object").getpeercert(binary_form=True)
+    finally:
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except (OSError, ssl.SSLError):
+            pass
+    if not cert:
+        raise CannotConnect("The controller did not present a TLS certificate")
+    return hashlib.sha256(cert).hexdigest()
 
 
 def normalize_mac(mac: str) -> str:
@@ -84,6 +129,16 @@ def _parse_ipv4(value: Any) -> str | None:
         return None
 
 
+def _parse_wired(raw: dict[str, Any]) -> bool | None:
+    """Wired/wireless flag of a client record (classic and v2 API)."""
+    if isinstance(wired := raw.get("is_wired"), bool):
+        return wired
+    kind = str(raw.get("type") or "").upper()
+    if kind in ("WIRED", "WIRELESS"):
+        return kind == "WIRED"
+    return None
+
+
 @dataclass(frozen=True, slots=True)
 class UnifiNetwork:
     """A UniFi LAN/VLAN network."""
@@ -103,6 +158,7 @@ class UnifiClient:
     ip: str | None
     network_id: str | None
     online: bool
+    wired: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,13 +184,23 @@ class UnifiApi:
         username: str,
         password: str,
         site: str,
+        tls_fingerprint: str | None = None,
     ) -> None:
-        """Initialize."""
+        """Initialize.
+
+        With a TLS fingerprint the certificate is pinned instead of being
+        verified against a CA (UniFi OS uses a self-signed certificate).
+        """
         self._session = session
         self._base = f"https://{host}"
         self._username = username
         self._password = password
         self._site = site
+        self._request_kwargs: dict[str, Any] = {"timeout": API_TIMEOUT}
+        if tls_fingerprint:
+            self._request_kwargs["ssl"] = aiohttp.Fingerprint(
+                bytes.fromhex(tls_fingerprint)
+            )
 
     async def login(self) -> None:
         """Log in to UniFi OS; the session cookie is kept in the cookie jar."""
@@ -146,19 +212,21 @@ class UnifiApi:
                     "password": self._password,
                     "rememberMe": True,
                 },
-                timeout=API_TIMEOUT,
+                **self._request_kwargs,
             ) as resp:
                 if resp.status in (400, 401, 403):
                     raise InvalidAuth(f"Login rejected (HTTP {resp.status})")
                 if resp.status != 200:
                     raise CannotConnect(f"Login failed (HTTP {resp.status})")
+        except aiohttp.ServerFingerprintMismatch as err:
+            raise CertificateMismatch(str(err)) from err
         except (aiohttp.ClientError, TimeoutError) as err:
             raise CannotConnect(str(err) or type(err).__name__) from err
 
     async def _get(self, path: str, *, retry: bool = True) -> Any:
         url = f"{self._base}/proxy/network{path}"
         try:
-            async with self._session.get(url, timeout=API_TIMEOUT) as resp:
+            async with self._session.get(url, **self._request_kwargs) as resp:
                 if resp.status == 401:
                     if not retry:
                         raise InvalidAuth(f"GET {path}: HTTP 401")
@@ -167,6 +235,8 @@ class UnifiApi:
                     raise CannotConnect(f"GET {path} failed (HTTP {resp.status})")
                 else:
                     payload = await resp.json(content_type=None)
+        except aiohttp.ServerFingerprintMismatch as err:
+            raise CertificateMismatch(str(err)) from err
         except (aiohttp.ClientError, TimeoutError, ValueError) as err:
             raise CannotConnect(str(err) or type(err).__name__) from err
 
@@ -232,7 +302,10 @@ class UnifiApi:
             network_id = next(
                 (raw[k] for k in network_keys if raw.get(k)), None
             ) or (old.network_id if old else None)
-            clients[mac] = UnifiClient(mac, str(name), ip, network_id, online)
+            wired = _parse_wired(raw)
+            if wired is None and old:
+                wired = old.wired
+            clients[mac] = UnifiClient(mac, str(name), ip, network_id, online, wired)
 
         site = self._site
         for raw in await self._get(f"/api/s/{site}/rest/user") or []:
@@ -439,16 +512,34 @@ class GatewaySSH:
         except (OSError, asyncssh.Error, TimeoutError) as err:
             raise CannotConnect(str(err) or type(err).__name__) from err
 
+    @staticmethod
+    def _parse_tools(stdout: Any) -> list[str]:
+        return [
+            line.removeprefix("tool=")
+            for line in str(stdout or "").splitlines()
+            if line.startswith("tool=")
+        ]
+
     async def async_probe(self) -> list[str]:
         """Return the WoL related tools available on the gateway."""
         conn = await self._connect()
         async with conn:
             result = await self._run(conn, _PROBE_SCRIPT)
-        return [
-            line.removeprefix("tool=")
-            for line in str(result.stdout or "").splitlines()
-            if line.startswith("tool=")
-        ]
+        return self._parse_tools(result.stdout)
+
+    async def async_diagnostics(self) -> dict[str, Any]:
+        """Return available tools and IPv4 interfaces of the gateway."""
+        async with self._lock:
+            conn = await self._connect()
+            async with conn:
+                probe = await self._run(conn, _PROBE_SCRIPT)
+                addr_out = await self._run(conn, "ip -o -4 addr show")
+        return {
+            "tools": self._parse_tools(probe.stdout),
+            "interfaces": {
+                name: str(addr) for name, addr in parse_interfaces(str(addr_out.stdout or ""))
+            },
+        }
 
     async def async_wake(
         self,

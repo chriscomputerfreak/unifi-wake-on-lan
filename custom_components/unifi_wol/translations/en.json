@@ -14,7 +14,7 @@
         "data_description": {
           "host": "IP address or hostname of the gateway, e.g. 192.168.1.1",
           "site": "UniFi site name, usually `default`",
-          "verify_ssl": "Leave disabled for the self-signed certificate of the gateway"
+          "verify_ssl": "Leave disabled for the self-signed certificate of the gateway; its fingerprint is then pinned on first connect."
         }
       },
       "ssh": {
@@ -25,6 +25,32 @@
           "ssh_username": "SSH username",
           "ssh_password": "SSH password"
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate UniFi Wake-on-LAN",
+        "description": "The gateway {host} rejected the stored credentials. Enter the new password for the UniFi account `{username}` and/or the SSH user `{ssh_username}`. Leave a field empty to keep the stored password.",
+        "data": {
+          "password": "UniFi password",
+          "ssh_password": "SSH password"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure UniFi Wake-on-LAN",
+        "description": "Change the connection settings. Your selected clients are kept. Leave password fields empty to keep the stored passwords. If the host changes, the new gateway's SSH host key and certificate are pinned.",
+        "data": {
+          "host": "Host",
+          "username": "Username",
+          "password": "UniFi password",
+          "site": "Site",
+          "verify_ssl": "Verify SSL certificate",
+          "ssh_port": "SSH port",
+          "ssh_username": "SSH username",
+          "ssh_password": "SSH password"
+        },
+        "data_description": {
+          "host": "IP address or hostname of the gateway, e.g. 192.168.1.1",
+          "verify_ssl": "Leave disabled for the self-signed certificate of the gateway; its fingerprint is then pinned on first connect."
+        }
       }
     },
     "error": {
@@ -33,38 +59,73 @@
       "cannot_connect_ssh": "Cannot connect to the gateway via SSH.",
       "invalid_auth_ssh": "SSH login failed.",
       "no_wol_method": "No usable tool to send Wake-on-LAN packets was found on the gateway.",
-      "unknown": "Unexpected error, see the log."
+      "unknown": "Unexpected error, see the log.",
+      "host_key_mismatch": "The gateway's SSH host key has changed. If this is expected, re-trust it in the integration options.",
+      "certificate_mismatch": "The controller's HTTPS certificate has changed. If this is expected, re-trust it in the integration options.",
+      "already_configured": "This controller/site is already configured."
     },
     "abort": {
-      "already_configured": "This controller/site is already configured."
+      "already_configured": "This controller/site is already configured.",
+      "reauth_successful": "Re-authentication was successful.",
+      "reconfigure_successful": "Reconfiguration was successful."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Wake-on-LAN clients",
-        "description": "Choose the clients that should get a wake button. ● online, ○ offline.",
+        "description": "Choose the clients that should get a wake button. ● online, ○ offline, 📶 Wi-Fi (Wake-on-LAN rarely works over Wi-Fi), ? not found on the controller.",
         "data": {
           "targets": "Clients",
-          "retrust_host_key": "Re-read and trust the SSH host key"
+          "retrust_host_key": "Re-read and trust the SSH host key and certificate"
         },
         "data_description": {
-          "retrust_host_key": "Only needed if the gateway's host key changed (e.g. after a reset)."
+          "retrust_host_key": "Only needed if the gateway's host key or certificate changed (e.g. after a reset or firmware update). You will see the fingerprints before anything is stored."
         }
+      },
+      "trust": {
+        "title": "Trust new fingerprints?",
+        "description": "**SSH host key (SHA256)**\nStored: `{ssh_old}`\nNow: `{ssh_new}`\n\n**HTTPS certificate (SHA256)**\nStored: `{tls_old}`\nNow: `{tls_new}`\n\nOnly confirm if you expected this change (reset, new gateway, firmware update). An unexpected change can mean that someone is intercepting the connection."
       }
     },
     "error": {
-      "cannot_connect_ssh": "Cannot connect to the gateway via SSH."
+      "cannot_connect_gateway": "Cannot reach the gateway (SSH or HTTPS).",
+      "controller_unavailable": "The UniFi controller is currently not reachable. Only the stored clients are listed."
     },
     "abort": {
-      "not_loaded": "The integration is not loaded.",
-      "no_data": "Could not load clients from the UniFi controller."
+      "not_loaded": "The integration is not loaded."
     }
   },
   "entity": {
     "button": {
       "wake": {
-        "name": "Wake"
+        "name": "Wake",
+        "state_attributes": {
+          "mac": {
+            "name": "MAC address"
+          },
+          "last_ip": {
+            "name": "Last IP address"
+          },
+          "network": {
+            "name": "Network"
+          },
+          "vlan": {
+            "name": "VLAN"
+          },
+          "online": {
+            "name": "Online"
+          },
+          "wired": {
+            "name": "Wired"
+          },
+          "last_interface": {
+            "name": "Last interface"
+          },
+          "last_method": {
+            "name": "Last method"
+          }
+        }
       }
     }
   },
@@ -73,7 +134,7 @@
       "message": "Wake-on-LAN for {mac} failed: {error}"
     },
     "host_key_mismatch": {
-      "message": "The SSH host key of the gateway has changed. If this is expected, re-trust it in the integration options."
+      "message": "The gateway's SSH host key has changed. Open Settings → Repairs to check and trust the new key."
     },
     "invalid_mac": {
       "message": "Invalid MAC address: {mac}"
@@ -86,6 +147,12 @@
     },
     "entry_not_loaded": {
       "message": "The selected config entry is not loaded."
+    },
+    "ssh_auth_failed": {
+      "message": "The gateway rejected the SSH credentials. Please re-authenticate the integration."
+    },
+    "controller_auth_failed": {
+      "message": "The UniFi controller rejected the credentials."
     }
   },
   "services": {
@@ -104,6 +171,23 @@
         "config_entry_id": {
           "name": "Controller",
           "description": "Only needed when several controllers are configured."
+        }
+      }
+    }
+  },
+  "issues": {
+    "fingerprint_changed": {
+      "title": "SSH host key or certificate of {title} changed",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Trust the new fingerprints of {title}?",
+            "description": "**SSH host key (SHA256)**\nStored: `{ssh_old}`\nNow: `{ssh_new}`\n\n**HTTPS certificate (SHA256)**\nStored: `{tls_old}`\nNow: `{tls_new}`\n\nOnly confirm if you expected this change (reset, new gateway, firmware update). An unexpected change can mean that someone is intercepting the connection."
+          }
+        },
+        "abort": {
+          "cannot_connect_gateway": "Cannot reach the gateway (SSH or HTTPS).",
+          "entry_removed": "The integration entry no longer exists."
         }
       }
     }

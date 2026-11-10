@@ -26,7 +26,13 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.typing import ConfigType
 
-from .api import GatewaySSH, UnifiApi, normalize_mac
+from .api import (
+    CannotConnect,
+    GatewaySSH,
+    UnifiApi,
+    async_fetch_tls_fingerprint,
+    normalize_mac,
+)
 from .const import (
     ATTR_CONFIG_ENTRY_ID,
     ATTR_INTERFACE,
@@ -36,10 +42,12 @@ from .const import (
     CONF_SSH_PASSWORD,
     CONF_SSH_PORT,
     CONF_SSH_USERNAME,
+    CONF_TLS_FINGERPRINT,
     DOMAIN,
     SERVICE_WAKE,
 )
 from .coordinator import UnifiWolConfigEntry, UnifiWolCoordinator
+from .trust import async_delete_trust_issue
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -108,6 +116,18 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: UnifiWolConfigEntry) -> bool:
     """Set up UniFi Wake-on-LAN from a config entry."""
+    if not entry.data[CONF_VERIFY_SSL] and not entry.data.get(CONF_TLS_FINGERPRINT):
+        # Entries created before 0.2.0: pin the current certificate now.
+        try:
+            fingerprint = await async_fetch_tls_fingerprint(entry.data[CONF_HOST])
+        except CannotConnect as err:
+            _LOGGER.debug("Could not pin the controller certificate yet: %s", err)
+        else:
+            hass.config_entries.async_update_entry(
+                entry, data={**entry.data, CONF_TLS_FINGERPRINT: fingerprint}
+            )
+            _LOGGER.info("Pinned the UniFi controller TLS certificate")
+
     data = entry.data
     session = async_create_clientsession(
         hass,
@@ -115,7 +135,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: UnifiWolConfigEntry) -> 
         cookie_jar=aiohttp.CookieJar(unsafe=True),
     )
     api = UnifiApi(
-        session, data[CONF_HOST], data[CONF_USERNAME], data[CONF_PASSWORD], data[CONF_SITE]
+        session,
+        data[CONF_HOST],
+        data[CONF_USERNAME],
+        data[CONF_PASSWORD],
+        data[CONF_SITE],
+        data.get(CONF_TLS_FINGERPRINT),
     )
     ssh = GatewaySSH(
         data[CONF_HOST],
@@ -149,3 +174,8 @@ async def _async_update_listener(
 async def async_unload_entry(hass: HomeAssistant, entry: UnifiWolConfigEntry) -> bool:
     """Unload a config entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: UnifiWolConfigEntry) -> None:
+    """Clean up when an entry is deleted."""
+    async_delete_trust_issue(hass, entry)

@@ -14,7 +14,7 @@
         "data_description": {
           "host": "IP-Adresse oder Hostname des Gateways, z. B. 192.168.1.1",
           "site": "Name der UniFi-Site, meist `default`",
-          "verify_ssl": "Für das selbstsignierte Zertifikat des Gateways deaktiviert lassen"
+          "verify_ssl": "Für das selbstsignierte Zertifikat des Gateways deaktiviert lassen; dessen Fingerabdruck wird dann bei der ersten Verbindung fest hinterlegt."
         }
       },
       "ssh": {
@@ -25,6 +25,32 @@
           "ssh_username": "SSH-Benutzername",
           "ssh_password": "SSH-Passwort"
         }
+      },
+      "reauth_confirm": {
+        "title": "UniFi Wake-on-LAN neu anmelden",
+        "description": "Das Gateway {host} hat die gespeicherten Zugangsdaten abgelehnt. Gib das neue Passwort für das UniFi-Konto `{username}` und/oder den SSH-Benutzer `{ssh_username}` ein. Leere Felder behalten das gespeicherte Passwort.",
+        "data": {
+          "password": "UniFi-Passwort",
+          "ssh_password": "SSH-Passwort"
+        }
+      },
+      "reconfigure": {
+        "title": "UniFi Wake-on-LAN neu konfigurieren",
+        "description": "Ändere die Verbindungseinstellungen. Die ausgewählten Clients bleiben erhalten. Leere Passwortfelder behalten die gespeicherten Passwörter. Bei einem neuen Host werden SSH-Hostkey und Zertifikat des neuen Gateways fest hinterlegt.",
+        "data": {
+          "host": "Host",
+          "username": "Benutzername",
+          "password": "UniFi-Passwort",
+          "site": "Site",
+          "verify_ssl": "SSL-Zertifikat prüfen",
+          "ssh_port": "SSH-Port",
+          "ssh_username": "SSH-Benutzername",
+          "ssh_password": "SSH-Passwort"
+        },
+        "data_description": {
+          "host": "IP-Adresse oder Hostname des Gateways, z. B. 192.168.1.1",
+          "verify_ssl": "Für das selbstsignierte Zertifikat des Gateways deaktiviert lassen; dessen Fingerabdruck wird dann bei der ersten Verbindung fest hinterlegt."
+        }
       }
     },
     "error": {
@@ -33,38 +59,73 @@
       "cannot_connect_ssh": "Keine SSH-Verbindung zum Gateway.",
       "invalid_auth_ssh": "SSH-Anmeldung fehlgeschlagen.",
       "no_wol_method": "Auf dem Gateway wurde kein Werkzeug gefunden, mit dem sich Wake-on-LAN-Pakete senden lassen.",
-      "unknown": "Unerwarteter Fehler, siehe Log."
+      "unknown": "Unerwarteter Fehler, siehe Log.",
+      "host_key_mismatch": "Der SSH-Hostkey des Gateways hat sich geändert. Wenn das erwartet ist, in den Optionen der Integration neu vertrauen.",
+      "certificate_mismatch": "Das HTTPS-Zertifikat des Controllers hat sich geändert. Wenn das erwartet ist, in den Optionen der Integration neu vertrauen.",
+      "already_configured": "Dieser Controller bzw. diese Site ist bereits eingerichtet."
     },
     "abort": {
-      "already_configured": "Dieser Controller bzw. diese Site ist bereits eingerichtet."
+      "already_configured": "Dieser Controller bzw. diese Site ist bereits eingerichtet.",
+      "reauth_successful": "Die erneute Anmeldung war erfolgreich.",
+      "reconfigure_successful": "Die Neukonfiguration war erfolgreich."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Wake-on-LAN-Clients",
-        "description": "Wähle die Clients, die einen Aufweck-Button bekommen sollen. ● online, ○ offline.",
+        "description": "Wähle die Clients, die einen Aufweck-Button bekommen sollen. ● online, ○ offline, 📶 WLAN (Wake-on-LAN funktioniert über WLAN selten), ? beim Controller nicht gefunden.",
         "data": {
           "targets": "Clients",
-          "retrust_host_key": "SSH-Hostkey neu einlesen und vertrauen"
+          "retrust_host_key": "SSH-Hostkey und Zertifikat neu einlesen und vertrauen"
         },
         "data_description": {
-          "retrust_host_key": "Nur nötig, wenn sich der Hostkey des Gateways geändert hat (z. B. nach einem Reset)."
+          "retrust_host_key": "Nur nötig, wenn sich Hostkey oder Zertifikat des Gateways geändert haben (z. B. nach einem Reset oder Firmware-Update). Du siehst die Fingerabdrücke, bevor etwas gespeichert wird."
         }
+      },
+      "trust": {
+        "title": "Neuen Fingerabdrücken vertrauen?",
+        "description": "**SSH-Hostkey (SHA256)**\nGespeichert: `{ssh_old}`\nAktuell: `{ssh_new}`\n\n**HTTPS-Zertifikat (SHA256)**\nGespeichert: `{tls_old}`\nAktuell: `{tls_new}`\n\nBestätige nur, wenn du diese Änderung erwartet hast (Reset, neues Gateway, Firmware-Update). Eine unerwartete Änderung kann bedeuten, dass jemand die Verbindung abfängt."
       }
     },
     "error": {
-      "cannot_connect_ssh": "Keine SSH-Verbindung zum Gateway."
+      "cannot_connect_gateway": "Das Gateway ist nicht erreichbar (SSH oder HTTPS).",
+      "controller_unavailable": "Der UniFi-Controller ist gerade nicht erreichbar. Es werden nur die gespeicherten Clients angezeigt."
     },
     "abort": {
-      "not_loaded": "Die Integration ist nicht geladen.",
-      "no_data": "Clients konnten nicht vom UniFi-Controller geladen werden."
+      "not_loaded": "Die Integration ist nicht geladen."
     }
   },
   "entity": {
     "button": {
       "wake": {
-        "name": "Aufwecken"
+        "name": "Aufwecken",
+        "state_attributes": {
+          "mac": {
+            "name": "MAC-Adresse"
+          },
+          "last_ip": {
+            "name": "Letzte IP-Adresse"
+          },
+          "network": {
+            "name": "Netzwerk"
+          },
+          "vlan": {
+            "name": "VLAN"
+          },
+          "online": {
+            "name": "Online"
+          },
+          "wired": {
+            "name": "Kabelgebunden"
+          },
+          "last_interface": {
+            "name": "Letztes Interface"
+          },
+          "last_method": {
+            "name": "Letzte Methode"
+          }
+        }
       }
     }
   },
@@ -73,7 +134,7 @@
       "message": "Wake-on-LAN für {mac} fehlgeschlagen: {error}"
     },
     "host_key_mismatch": {
-      "message": "Der SSH-Hostkey des Gateways hat sich geändert. Wenn das erwartet ist, in den Optionen der Integration neu vertrauen."
+      "message": "Der SSH-Hostkey des Gateways hat sich geändert. Unter Einstellungen → Reparaturen kannst du den neuen Schlüssel prüfen und ihm vertrauen."
     },
     "invalid_mac": {
       "message": "Ungültige MAC-Adresse: {mac}"
@@ -86,6 +147,12 @@
     },
     "entry_not_loaded": {
       "message": "Der gewählte Eintrag ist nicht geladen."
+    },
+    "ssh_auth_failed": {
+      "message": "Das Gateway hat die SSH-Zugangsdaten abgelehnt. Bitte die Integration neu anmelden."
+    },
+    "controller_auth_failed": {
+      "message": "Der UniFi-Controller hat die Zugangsdaten abgelehnt."
     }
   },
   "services": {
@@ -104,6 +171,23 @@
         "config_entry_id": {
           "name": "Controller",
           "description": "Nur nötig, wenn mehrere Controller eingerichtet sind."
+        }
+      }
+    }
+  },
+  "issues": {
+    "fingerprint_changed": {
+      "title": "SSH-Hostkey oder Zertifikat von {title} hat sich geändert",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Den neuen Fingerabdrücken von {title} vertrauen?",
+            "description": "**SSH-Hostkey (SHA256)**\nGespeichert: `{ssh_old}`\nAktuell: `{ssh_new}`\n\n**HTTPS-Zertifikat (SHA256)**\nGespeichert: `{tls_old}`\nAktuell: `{tls_new}`\n\nBestätige nur, wenn du diese Änderung erwartet hast (Reset, neues Gateway, Firmware-Update). Eine unerwartete Änderung kann bedeuten, dass jemand die Verbindung abfängt."
+          }
+        },
+        "abort": {
+          "cannot_connect_gateway": "Das Gateway ist nicht erreichbar (SSH oder HTTPS).",
+          "entry_removed": "Der Integrationseintrag existiert nicht mehr."
         }
       }
     }

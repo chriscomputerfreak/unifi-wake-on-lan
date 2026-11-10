@@ -47,10 +47,20 @@ Prerequisites on the gateway:
 
 Then go to *Settings → Devices & services → Add integration → UniFi Wake-on-LAN*:
 
-1. Controller: host (e.g. `192.168.1.1`), username, password and site (`default`).
+1. Controller: host (e.g. `192.168.1.1`), username, password and site (`default`). With
+   *Verify SSL certificate* off (the default for the self-signed certificate), the
+   certificate's fingerprint is pinned on first connect.
 2. SSH: port `22`, user `root` and the SSH password. The SSH host key is pinned on first
    connect.
 3. Open **Configure** and select the clients that should get a **Wake** button.
+   ● online, ○ offline, 📶 Wi-Fi client (WoL rarely works over Wi-Fi).
+
+### Changing the setup later
+
+- **Reconfigure** (entry menu ⋮): change host, credentials, site or SSH settings. Your
+  selected clients and entity IDs are kept; empty password fields keep the stored passwords.
+- **Re-authenticate**: if the controller or the gateway rejects the stored credentials, Home
+  Assistant asks for the new passwords.
 
 ## Usage
 
@@ -73,8 +83,12 @@ response_variable: result   # {mac, interface, method}
   disable *Fast Startup*. Over Wi-Fi, WoL almost never works.
 - A sleeping client is "offline" in UniFi. Its network and IP then come from the client history
   or from the data stored when you selected it.
-- *Host key changed* (e.g. after a gateway reset): tick "Re-read and trust the SSH host key" in
-  the options.
+- *Host key or certificate changed* (e.g. after a gateway reset): a repair appears under
+  *Settings → Repairs*. It shows the stored and the new SHA256 fingerprints and stores the new
+  ones only after you confirm. The same is available in the options ("Re-read and trust the
+  SSH host key and certificate").
+- **Download diagnostics** (entry menu ⋮) when opening an issue. Passwords and usernames are
+  removed, MAC and IP addresses are shortened.
 - Debug logging:
   ```yaml
   logger:
@@ -87,6 +101,11 @@ response_variable: result   # {mac, interface, method}
 The SSH password grants root access to your gateway. Like all integration credentials, it is
 stored in `.storage/core.config_entries`. The integration only runs `ip -o -4 addr show` and
 the wake script; all values are escaped with `shlex.quote`.
+
+Both connections are pinned on first use: the SSH host key and, unless you enable CA
+verification, the TLS certificate of the controller. A changed key or certificate is never
+accepted silently. SSH keys are not supported on purpose: UniFi OS removes
+`authorized_keys` on firmware updates.
 
 ## Disclaimer
 
