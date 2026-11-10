@@ -1,0 +1,111 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "UniFi-Controller",
+        "description": "Verwende ein lokales UniFi-OS-Konto (kein Ubiquiti-SSO, keine 2FA). Ein Admin mit Nur-Lese-Rechten (View Only) reicht aus.",
+        "data": {
+          "host": "Host",
+          "username": "Benutzername",
+          "password": "Passwort",
+          "site": "Site",
+          "verify_ssl": "SSL-Zertifikat prüfen"
+        },
+        "data_description": {
+          "host": "IP-Adresse oder Hostname des Gateways, z. B. 192.168.1.1",
+          "site": "Name der UniFi-Site, meist `default`",
+          "verify_ssl": "Für das selbstsignierte Zertifikat des Gateways deaktiviert lassen"
+        }
+      },
+      "ssh": {
+        "title": "SSH-Zugang zum Gateway",
+        "description": "Das Magic Packet wird vom Gateway ({host}) selbst auf dem VLAN-Interface des Clients gesendet. Aktiviere SSH in den Konsolen-Einstellungen von UniFi OS und vergib dort ein Passwort. Der SSH-Hostkey wird bei der ersten Verbindung fest hinterlegt.",
+        "data": {
+          "ssh_port": "SSH-Port",
+          "ssh_username": "SSH-Benutzername",
+          "ssh_password": "SSH-Passwort"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Keine Verbindung zum UniFi-Controller.",
+      "invalid_auth": "UniFi-Anmeldung fehlgeschlagen.",
+      "cannot_connect_ssh": "Keine SSH-Verbindung zum Gateway.",
+      "invalid_auth_ssh": "SSH-Anmeldung fehlgeschlagen.",
+      "no_wol_method": "Auf dem Gateway wurde kein Werkzeug gefunden, mit dem sich Wake-on-LAN-Pakete senden lassen.",
+      "unknown": "Unerwarteter Fehler, siehe Log."
+    },
+    "abort": {
+      "already_configured": "Dieser Controller bzw. diese Site ist bereits eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Wake-on-LAN-Clients",
+        "description": "Wähle die Clients, die einen Aufweck-Button bekommen sollen. ● online, ○ offline.",
+        "data": {
+          "targets": "Clients",
+          "retrust_host_key": "SSH-Hostkey neu einlesen und vertrauen"
+        },
+        "data_description": {
+          "retrust_host_key": "Nur nötig, wenn sich der Hostkey des Gateways geändert hat (z. B. nach einem Reset)."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect_ssh": "Keine SSH-Verbindung zum Gateway."
+    },
+    "abort": {
+      "not_loaded": "Die Integration ist nicht geladen.",
+      "no_data": "Clients konnten nicht vom UniFi-Controller geladen werden."
+    }
+  },
+  "entity": {
+    "button": {
+      "wake": {
+        "name": "Aufwecken"
+      }
+    }
+  },
+  "exceptions": {
+    "wake_failed": {
+      "message": "Wake-on-LAN für {mac} fehlgeschlagen: {error}"
+    },
+    "host_key_mismatch": {
+      "message": "Der SSH-Hostkey des Gateways hat sich geändert. Wenn das erwartet ist, in den Optionen der Integration neu vertrauen."
+    },
+    "invalid_mac": {
+      "message": "Ungültige MAC-Adresse: {mac}"
+    },
+    "no_entries": {
+      "message": "Es ist kein UniFi-Wake-on-LAN-Eintrag geladen."
+    },
+    "multiple_entries": {
+      "message": "Es sind mehrere UniFi-Wake-on-LAN-Einträge geladen, bitte einen auswählen."
+    },
+    "entry_not_loaded": {
+      "message": "Der gewählte Eintrag ist nicht geladen."
+    }
+  },
+  "services": {
+    "wake": {
+      "name": "Client aufwecken",
+      "description": "Sendet ein Wake-on-LAN-Magic-Packet vom UniFi-Gateway im Netzwerk/VLAN des Clients.",
+      "fields": {
+        "mac": {
+          "name": "MAC-Adresse",
+          "description": "MAC-Adresse des Clients, der geweckt werden soll."
+        },
+        "interface": {
+          "name": "Interface",
+          "description": "Optionales Gateway-Interface (z. B. br20). Wird sonst automatisch anhand des Netzwerks des Clients bestimmt."
+        },
+        "config_entry_id": {
+          "name": "Controller",
+          "description": "Nur nötig, wenn mehrere Controller eingerichtet sind."
+        }
+      }
+    }
+  }
+}

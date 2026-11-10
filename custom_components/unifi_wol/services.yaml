@@ -1,0 +1,17 @@
+wake:
+  fields:
+    mac:
+      required: true
+      example: "aa:bb:cc:dd:ee:ff"
+      selector:
+        text:
+    interface:
+      required: false
+      example: "br20"
+      selector:
+        text:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: unifi_wol

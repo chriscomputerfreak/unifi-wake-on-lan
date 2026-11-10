@@ -1,0 +1,111 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "UniFi controller",
+        "description": "Use a local UniFi OS account (no Ubiquiti SSO, no 2FA). A view-only admin is sufficient.",
+        "data": {
+          "host": "Host",
+          "username": "Username",
+          "password": "Password",
+          "site": "Site",
+          "verify_ssl": "Verify SSL certificate"
+        },
+        "data_description": {
+          "host": "IP address or hostname of the gateway, e.g. 192.168.1.1",
+          "site": "UniFi site name, usually `default`",
+          "verify_ssl": "Leave disabled for the self-signed certificate of the gateway"
+        }
+      },
+      "ssh": {
+        "title": "SSH access to the gateway",
+        "description": "The magic packet is sent by the gateway ({host}) itself on the VLAN interface of the client. Enable SSH in the UniFi OS console settings and set a password there. The SSH host key is pinned on first connect.",
+        "data": {
+          "ssh_port": "SSH port",
+          "ssh_username": "SSH username",
+          "ssh_password": "SSH password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the UniFi controller.",
+      "invalid_auth": "UniFi login failed.",
+      "cannot_connect_ssh": "Cannot connect to the gateway via SSH.",
+      "invalid_auth_ssh": "SSH login failed.",
+      "no_wol_method": "No usable tool to send Wake-on-LAN packets was found on the gateway.",
+      "unknown": "Unexpected error, see the log."
+    },
+    "abort": {
+      "already_configured": "This controller/site is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Wake-on-LAN clients",
+        "description": "Choose the clients that should get a wake button. ● online, ○ offline.",
+        "data": {
+          "targets": "Clients",
+          "retrust_host_key": "Re-read and trust the SSH host key"
+        },
+        "data_description": {
+          "retrust_host_key": "Only needed if the gateway's host key changed (e.g. after a reset)."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect_ssh": "Cannot connect to the gateway via SSH."
+    },
+    "abort": {
+      "not_loaded": "The integration is not loaded.",
+      "no_data": "Could not load clients from the UniFi controller."
+    }
+  },
+  "entity": {
+    "button": {
+      "wake": {
+        "name": "Wake"
+      }
+    }
+  },
+  "exceptions": {
+    "wake_failed": {
+      "message": "Wake-on-LAN for {mac} failed: {error}"
+    },
+    "host_key_mismatch": {
+      "message": "The SSH host key of the gateway has changed. If this is expected, re-trust it in the integration options."
+    },
+    "invalid_mac": {
+      "message": "Invalid MAC address: {mac}"
+    },
+    "no_entries": {
+      "message": "No UniFi Wake-on-LAN entry is loaded."
+    },
+    "multiple_entries": {
+      "message": "Several UniFi Wake-on-LAN entries are loaded, please select one."
+    },
+    "entry_not_loaded": {
+      "message": "The selected config entry is not loaded."
+    }
+  },
+  "services": {
+    "wake": {
+      "name": "Wake client",
+      "description": "Sends a Wake-on-LAN magic packet from the UniFi gateway on the client's network/VLAN.",
+      "fields": {
+        "mac": {
+          "name": "MAC address",
+          "description": "MAC address of the client to wake."
+        },
+        "interface": {
+          "name": "Interface",
+          "description": "Optional gateway interface (e.g. br20). Determined automatically from the client's network if omitted."
+        },
+        "config_entry_id": {
+          "name": "Controller",
+          "description": "Only needed when several controllers are configured."
+        }
+      }
+    }
+  }
+}

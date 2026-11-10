@@ -1,0 +1,14 @@
+{
+  "entity": {
+    "button": {
+      "wake": {
+        "default": "mdi:power"
+      }
+    }
+  },
+  "services": {
+    "wake": {
+      "service": "mdi:power"
+    }
+  }
+}

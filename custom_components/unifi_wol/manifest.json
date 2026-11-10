@@ -1,0 +1,19 @@
+{
+  "domain": "unifi_wol",
+  "name": "UniFi Wake-on-LAN",
+  "codeowners": [
+    "@chriscomputerfreak"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/chriscomputerfreak/unifi-wake-on-lan",
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/chriscomputerfreak/unifi-wake-on-lan/issues",
+  "loggers": [
+    "asyncssh"
+  ],
+  "requirements": [
+    "asyncssh>=2.14.0"
+  ],
+  "version": "0.1.0"
+}
