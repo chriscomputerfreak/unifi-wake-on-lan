@@ -78,7 +78,7 @@ def test_script_falls_back_to_neigh(tmp_path) -> None:
     log = tmp_path / "log"
     for tool in ("ip", "bash"):
         f = bindir / tool
-        f.write_text(f'#!/bin/sh\necho "{tool} $*" >> {log}\nexit 0\n')
+        f.write_text(f'#!/bin/sh\nprintf "%s\\n" "{tool} $*" >> {log}\nexit 0\n')
         f.chmod(0o755)
     script = build_wake_script("aa:bb:cc:dd:ee:ff", "br20", "192.168.20.50")
     res = subprocess.run(["/bin/sh", "-c", script], capture_output=True, text=True,
