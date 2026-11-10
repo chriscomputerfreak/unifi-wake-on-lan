@@ -26,6 +26,9 @@ SERVICE_WAKE = "wake"
 ATTR_MAC = "mac"
 ATTR_INTERFACE = "interface"
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
+ATTR_WAIT = "wait"
+ATTR_TIMEOUT = "timeout"
+DEFAULT_WAIT_TIMEOUT = 120
 
 # Keys stored per target in the options
 TARGET_NAME = "name"

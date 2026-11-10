@@ -64,8 +64,14 @@ Then go to *Settings → Devices & services → Add integration → UniFi Wake-o
 
 ## Usage
 
-Each selected client gets a button entity. Its attributes show network, VLAN and last IP.
-After the first press they also show the interface and method that were used.
+Each selected client gets two entities:
+
+- **Wake** button. Its attributes show network, VLAN and last IP; after the first press also
+  the interface and method that were used.
+- **Online** sensor (connectivity), based on the UniFi client list. It is refreshed every
+  5 minutes and additionally 30, 60 and 120 seconds after a wake, so you can see whether the
+  client actually woke up. Note that UniFi may keep listing a client for a few minutes after
+  it went to sleep.
 
 The action also works for clients without a button:
 
@@ -74,7 +80,24 @@ action: unifi_wol.wake
 data:
   mac: "aa:bb:cc:dd:ee:ff"
   # interface: br20   # optional, overrides auto detection
-response_variable: result   # {mac, interface, method}
+  # wait: true          # optional, wait until the client is online
+  # timeout: 120        # optional, seconds (10-600)
+response_variable: result   # {mac, interface, method[, online]}
+```
+
+Example: wake the PC and only continue once it is reachable.
+
+```yaml
+- action: unifi_wol.wake
+  data:
+    mac: "aa:bb:cc:dd:ee:ff"
+    wait: true
+  response_variable: wake
+- if: "{{ not wake.online }}"
+  then:
+    - action: notify.notify
+      data:
+        message: "The PC did not wake up."
 ```
 
 ## Troubleshooting

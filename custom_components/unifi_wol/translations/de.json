@@ -74,7 +74,7 @@
     "step": {
       "init": {
         "title": "Wake-on-LAN-Clients",
-        "description": "Wähle die Clients, die einen Aufweck-Button bekommen sollen. ● online, ○ offline, 📶 WLAN (Wake-on-LAN funktioniert über WLAN selten), ? beim Controller nicht gefunden.",
+        "description": "Wähle die Clients, die einen Aufweck-Button und einen Online-Sensor bekommen sollen. ● online, ○ offline, 📶 WLAN (Wake-on-LAN funktioniert über WLAN selten), ? beim Controller nicht gefunden.",
         "data": {
           "targets": "Clients",
           "retrust_host_key": "SSH-Hostkey und Zertifikat neu einlesen und vertrauen"
@@ -127,6 +127,11 @@
           }
         }
       }
+    },
+    "binary_sensor": {
+      "online": {
+        "name": "Online"
+      }
     }
   },
   "exceptions": {
@@ -171,6 +176,14 @@
         "config_entry_id": {
           "name": "Controller",
           "description": "Nur nötig, wenn mehrere Controller eingerichtet sind."
+        },
+        "wait": {
+          "name": "Warten, bis online",
+          "description": "Wartet, bis der Controller den Client als verbunden meldet. Die Antwort enthält dann `online: true/false`."
+        },
+        "timeout": {
+          "name": "Zeitlimit",
+          "description": "Maximale Wartezeit in Sekunden (10–600)."
         }
       }
     }

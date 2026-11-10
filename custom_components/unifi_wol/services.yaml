@@ -15,3 +15,17 @@ wake:
       selector:
         config_entry:
           integration: unifi_wol
+    wait:
+      required: false
+      default: false
+      selector:
+        boolean:
+    timeout:
+      required: false
+      default: 120
+      selector:
+        number:
+          min: 10
+          max: 600
+          unit_of_measurement: s
+          mode: box

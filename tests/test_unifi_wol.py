@@ -11,13 +11,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import asyncssh
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er, issue_registry as ir
+from homeassistant.util import dt as dt_util
 
 from custom_components.unifi_wol import api
 from custom_components.unifi_wol.api import (
@@ -161,6 +162,10 @@ async def test_full_flow(hass: HomeAssistant, mocks) -> None:
     assert state is not None, entity_id
     assert state.attributes["network"] == "Gaming" and state.attributes["vlan"] == 20
     assert state.attributes["wired"] is True
+    sensors = [e for e in er.async_entries_for_config_entry(ent_reg, entry.entry_id) if e.domain == "binary_sensor"]
+    assert len(sensors) == 1
+    assert hass.states.get(sensors[0].entity_id).state == "off"
+    assert sensors[0].unique_id == "192.168.1.1_default_aa:bb:cc:dd:ee:ff_online"
     print(entity_id, dict(state.attributes))
 
     await hass.services.async_call("button", "press", {"entity_id": entity_id}, blocking=True)
@@ -180,7 +185,7 @@ async def test_full_flow(hass: HomeAssistant, mocks) -> None:
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(result["flow_id"], {"targets": []})
     await hass.async_block_till_done()
-    assert not [e for e in er.async_entries_for_config_entry(ent_reg, entry.entry_id) if e.domain == "button"]
+    assert not er.async_entries_for_config_entry(ent_reg, entry.entry_id)
 
     assert await hass.config_entries.async_unload(entry.entry_id)
 
@@ -261,7 +266,7 @@ async def test_reconfigure(hass: HomeAssistant, mocks) -> None:
     entry = _entry(hass)
     await _setup(hass, entry)
     ent_reg = er.async_get(hass)
-    button = er.async_entries_for_config_entry(ent_reg, entry.entry_id)[0]
+    button = next(e for e in er.async_entries_for_config_entry(ent_reg, entry.entry_id) if e.domain == "button")
     assert button.unique_id == "192.168.1.1_default_aa:bb:cc:dd:ee:ff_wake"
 
     result = await entry.start_reconfigure_flow(hass)
@@ -286,6 +291,8 @@ async def test_reconfigure(hass: HomeAssistant, mocks) -> None:
     assert entry.options["targets"]
     migrated = ent_reg.async_get(button.entity_id)
     assert migrated.unique_id == "10.0.0.1_default_aa:bb:cc:dd:ee:ff_wake"
+    assert sorted(e.unique_id for e in er.async_entries_for_config_entry(ent_reg, entry.entry_id)) == [
+        "10.0.0.1_default_aa:bb:cc:dd:ee:ff_online", "10.0.0.1_default_aa:bb:cc:dd:ee:ff_wake"]
     assert entry.state is ConfigEntryState.LOADED
 
     # same host: a changed certificate is not silently accepted
@@ -435,3 +442,61 @@ async def test_fetch_tls_fingerprint(socket_enabled, tmp_path) -> None:
 
     with pytest.raises(api.CannotConnect):
         await api.async_fetch_tls_fingerprint(f"127.0.0.1:{port}")
+
+
+async def test_online_sensor_follows_wake(hass: HomeAssistant, mocks) -> None:
+    entry = _entry(hass)
+    await _setup(hass, entry)
+    sensor = next(e.entity_id for e in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
+                  if e.domain == "binary_sensor")
+    assert hass.states.get(sensor).state == "off"
+
+    online = {**CLIENTS, "aa:bb:cc:dd:ee:ff": UnifiClient(
+        "aa:bb:cc:dd:ee:ff", "Gaming-PC", "192.168.20.50", "n20", True, True)}
+    with patch("custom_components.unifi_wol.api.UnifiApi.clients", AsyncMock(return_value=online)) as clients:
+        await hass.services.async_call(DOMAIN, "wake", {"mac": "aa:bb:cc:dd:ee:ff"}, blocking=True)
+        calls = clients.await_count
+        # follow-up refresh 30 s later, long before the regular 5 min poll
+        async_fire_time_changed(hass, dt_util.utcnow() + datetime.timedelta(seconds=31))
+        await hass.async_block_till_done()
+        assert clients.await_count == calls + 1
+        assert hass.states.get(sensor).state == "on"
+
+    # controller down -> online state unknown
+    with patch("custom_components.unifi_wol.api.UnifiApi.networks", AsyncMock(side_effect=api.CannotConnect("down"))):
+        await entry.runtime_data.async_refresh()
+        await hass.async_block_till_done()
+    assert hass.states.get(sensor).state == "unavailable"
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_wake_action_waits_for_online(hass: HomeAssistant, mocks) -> None:
+    entry = _entry(hass)
+    await _setup(hass, entry)
+    online = {**CLIENTS, "aa:bb:cc:dd:ee:ff": UnifiClient(
+        "aa:bb:cc:dd:ee:ff", "Gaming-PC", "192.168.20.50", "n20", True, True)}
+    with (
+        patch("custom_components.unifi_wol.coordinator.WAIT_POLL_INTERVAL", 0),
+        patch("custom_components.unifi_wol.api.UnifiApi.clients",
+              AsyncMock(side_effect=[CLIENTS, CLIENTS, online])),
+    ):
+        resp = await hass.services.async_call(
+            DOMAIN, "wake", {"mac": "aa:bb:cc:dd:ee:ff", "wait": True, "timeout": 10},
+            blocking=True, return_response=True)
+    assert resp["online"] is True and resp["method"] == "etherwake"
+
+    with (
+        patch("custom_components.unifi_wol.coordinator.WAIT_POLL_INTERVAL", 0),
+        patch("custom_components.unifi_wol.coordinator.asyncio.get_running_loop") as loop,
+    ):
+        # the clock jumps past the timeout after the first poll
+        loop.return_value.time.side_effect = [0, 0, 11]
+        resp = await hass.services.async_call(
+            DOMAIN, "wake", {"mac": "aa:bb:cc:dd:ee:ff", "wait": True, "timeout": 10},
+            blocking=True, return_response=True)
+    assert resp["online"] is False
+
+    resp = await hass.services.async_call(
+        DOMAIN, "wake", {"mac": "aa:bb:cc:dd:ee:ff"}, blocking=True, return_response=True)
+    assert "online" not in resp
+    assert await hass.config_entries.async_unload(entry.entry_id)

@@ -38,7 +38,10 @@ Dann *Einstellungen → Geräte & Dienste → Integration hinzufügen → UniFi 
 
 ## Nutzung
 
-Button: `button.<client>_aufwecken`. Die Attribute zeigen Netzwerk, VLAN, letzte IP und nach dem ersten Druck die verwendete Methode und das Interface.
+Jeder ausgewählte Client bekommt zwei Entitäten:
+
+- **Button** `button.<client>_aufwecken`. Die Attribute zeigen Netzwerk, VLAN, letzte IP und nach dem ersten Druck die verwendete Methode und das Interface.
+- **Online-Sensor** `binary_sensor.<client>_online` (Verbindung), basierend auf der UniFi-Clientliste. Er wird alle 5 Minuten und zusätzlich 30, 60 und 120 Sekunden nach dem Wecken aktualisiert, sodass du siehst, ob der Client wirklich aufgewacht ist. UniFi führt einen Client nach dem Einschlafen teils noch einige Minuten als verbunden.
 
 Aktion (geht auch für Clients ohne Button):
 
@@ -47,7 +50,24 @@ action: unifi_wol.wake
 data:
   mac: "aa:bb:cc:dd:ee:ff"
   # interface: br20   # optional, überschreibt die automatische Erkennung
-response_variable: result   # {mac, interface, method}
+  # wait: true          # optional, warten bis der Client online ist
+  # timeout: 120        # optional, Sekunden (10–600)
+response_variable: result   # {mac, interface, method[, online]}
+```
+
+Beispiel: PC wecken und erst weitermachen, wenn er erreichbar ist.
+
+```yaml
+- action: unifi_wol.wake
+  data:
+    mac: "aa:bb:cc:dd:ee:ff"
+    wait: true
+  response_variable: wake
+- if: "{{ not wake.online }}"
+  then:
+    - action: notify.notify
+      data:
+        message: "Der PC ist nicht aufgewacht."
 ```
 
 ## Hinweise und Fehlersuche

@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
+from datetime import datetime
 import logging
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -36,6 +39,11 @@ from .trust import async_create_trust_issue
 _LOGGER = logging.getLogger(__name__)
 
 type UnifiWolConfigEntry = ConfigEntry[UnifiWolCoordinator]
+
+# Extra controller polls after a wake so the online sensor follows quickly
+FOLLOWUP_REFRESH_DELAYS = (30, 60, 120)
+# Poll interval while an action waits for the client to come online
+WAIT_POLL_INTERVAL = 10.0
 
 
 @dataclass(slots=True)
@@ -70,6 +78,54 @@ class UnifiWolCoordinator(DataUpdateCoordinator[UnifiWolData]):
         self.ssh = ssh
         # Last successful wake per MAC (for diagnostics)
         self.last_wakes: dict[str, dict[str, Any]] = {}
+        self._followup_unsubs: list[CALLBACK_TYPE] = []
+
+    async def async_shutdown(self) -> None:
+        """Cancel pending follow-up refreshes."""
+        self._cancel_followups()
+        await super().async_shutdown()
+
+    @callback
+    def _cancel_followups(self) -> None:
+        for unsub in self._followup_unsubs:
+            unsub()
+        self._followup_unsubs.clear()
+
+    @callback
+    def _schedule_followups(self) -> None:
+        """Poll the controller a few times shortly after a wake."""
+        self._cancel_followups()
+
+        def _make(delay: int) -> None:
+            async def _refresh(_now: datetime) -> None:
+                self._followup_unsubs = [
+                    u for u in self._followup_unsubs if u is not unsub
+                ]
+                await self.async_refresh()
+
+            unsub = async_call_later(self.hass, delay, _refresh)
+            self._followup_unsubs.append(unsub)
+
+        for delay in FOLLOWUP_REFRESH_DELAYS:
+            _make(delay)
+
+    def is_online(self, mac: str) -> bool:
+        """Whether the controller currently lists the client as connected."""
+        client = self.data.clients.get(mac) if self.data else None
+        return bool(client and client.online)
+
+    async def async_wait_online(self, mac: str, timeout: float) -> bool:
+        """Poll the controller until the client is online or the timeout passes."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while True:
+            remaining = deadline - loop.time()
+            await asyncio.sleep(max(0.0, min(WAIT_POLL_INTERVAL, remaining)))
+            await self.async_refresh()
+            if self.is_online(mac):
+                return True
+            if loop.time() >= deadline:
+                return False
 
     async def _async_update_data(self) -> UnifiWolData:
         try:
@@ -135,4 +191,5 @@ class UnifiWolCoordinator(DataUpdateCoordinator[UnifiWolData]):
             "interface": result.interface,
             "method": result.method,
         }
+        self._schedule_followups()
         return result

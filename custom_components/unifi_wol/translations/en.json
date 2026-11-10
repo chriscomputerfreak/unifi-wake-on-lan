@@ -74,7 +74,7 @@
     "step": {
       "init": {
         "title": "Wake-on-LAN clients",
-        "description": "Choose the clients that should get a wake button. ● online, ○ offline, 📶 Wi-Fi (Wake-on-LAN rarely works over Wi-Fi), ? not found on the controller.",
+        "description": "Choose the clients that should get a wake button and an online sensor. ● online, ○ offline, 📶 Wi-Fi (Wake-on-LAN rarely works over Wi-Fi), ? not found on the controller.",
         "data": {
           "targets": "Clients",
           "retrust_host_key": "Re-read and trust the SSH host key and certificate"
@@ -127,6 +127,11 @@
           }
         }
       }
+    },
+    "binary_sensor": {
+      "online": {
+        "name": "Online"
+      }
     }
   },
   "exceptions": {
@@ -171,6 +176,14 @@
         "config_entry_id": {
           "name": "Controller",
           "description": "Only needed when several controllers are configured."
+        },
+        "wait": {
+          "name": "Wait until online",
+          "description": "Wait until the controller reports the client as connected. The response then contains `online: true/false`."
+        },
+        "timeout": {
+          "name": "Timeout",
+          "description": "Maximum waiting time in seconds (10–600)."
         }
       }
     }

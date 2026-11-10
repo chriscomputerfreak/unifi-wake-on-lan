@@ -4,6 +4,14 @@
       "wake": {
         "default": "mdi:power"
       }
+    },
+    "binary_sensor": {
+      "online": {
+        "default": "mdi:lan-disconnect",
+        "state": {
+          "on": "mdi:lan-connect"
+        }
+      }
     }
   },
   "services": {

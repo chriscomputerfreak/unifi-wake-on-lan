@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import aiohttp
 import voluptuous as vol
@@ -37,21 +38,25 @@ from .const import (
     ATTR_CONFIG_ENTRY_ID,
     ATTR_INTERFACE,
     ATTR_MAC,
+    ATTR_TIMEOUT,
+    ATTR_WAIT,
     CONF_SITE,
     CONF_SSH_HOST_KEY,
     CONF_SSH_PASSWORD,
     CONF_SSH_PORT,
     CONF_SSH_USERNAME,
     CONF_TLS_FINGERPRINT,
+    DEFAULT_WAIT_TIMEOUT,
     DOMAIN,
     SERVICE_WAKE,
 )
 from .coordinator import UnifiWolConfigEntry, UnifiWolCoordinator
+from .entity import async_cleanup_registries
 from .trust import async_delete_trust_issue
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.BUTTON]
+PLATFORMS = [Platform.BINARY_SENSOR, Platform.BUTTON]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 WAKE_SCHEMA = vol.Schema(
@@ -61,6 +66,10 @@ WAKE_SCHEMA = vol.Schema(
             cv.string, vol.Match(r"^[A-Za-z0-9_.:-]{1,32}$")
         ),
         vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
+        vol.Optional(ATTR_WAIT, default=False): cv.boolean,
+        vol.Optional(ATTR_TIMEOUT, default=DEFAULT_WAIT_TIMEOUT): vol.All(
+            vol.Coerce(int), vol.Range(min=10, max=600)
+        ),
     }
 )
 
@@ -102,7 +111,16 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
         coordinator: UnifiWolCoordinator = entry.runtime_data
         result = await coordinator.async_wake(mac, call.data.get(ATTR_INTERFACE))
-        return {"mac": mac, "interface": result.interface, "method": result.method}
+        response: dict[str, Any] = {
+            "mac": mac,
+            "interface": result.interface,
+            "method": result.method,
+        }
+        if call.data[ATTR_WAIT]:
+            response["online"] = await coordinator.async_wait_online(
+                mac, call.data[ATTR_TIMEOUT]
+            )
+        return response
 
     hass.services.async_register(
         DOMAIN,
@@ -160,6 +178,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: UnifiWolConfigEntry) -> 
         )
 
     entry.runtime_data = coordinator
+    async_cleanup_registries(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
