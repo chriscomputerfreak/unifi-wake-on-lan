@@ -5,6 +5,9 @@
 
 *Deutsche Anleitung: [README.de.md](README.de.md)*
 
+Questions, feedback or a different gateway model? Join the
+[discussion in the Home Assistant Community](https://community.home-assistant.io/t/unifi-wake-on-lan-wake-clients-on-any-vlan-through-your-unifi-gateway/1033912).
+
 Wake clients **on any VLAN**. Instead of sending the magic packet from Home Assistant (which
 only reaches its own broadcast domain), this integration lets your UniFi gateway send it
 directly on the interface of the network the client was last seen in.
