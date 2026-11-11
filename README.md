@@ -12,6 +12,10 @@ directly on the interface of the network the client was last seen in.
 Tested with a **UniFi Cloud Gateway Fiber (UCG Fiber)**. It is meant for any UniFi OS gateway
 (UCG Ultra/Max, UDM, UDM Pro/SE, UXG…).
 
+![Device page with Wake button and Online sensor](https://raw.githubusercontent.com/chriscomputerfreak/unifi-wake-on-lan/main/docs/images/device-page.png)
+
+![Integration page](https://raw.githubusercontent.com/chriscomputerfreak/unifi-wake-on-lan/main/docs/images/integration-page.png)
+
 ## How it works
 
 1. The UniFi Network API (read only) provides clients (active and history) and networks

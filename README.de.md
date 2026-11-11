@@ -4,6 +4,10 @@
 
 Weckt Clients **in jedem VLAN** auf: Das Magic Packet wird nicht von Home Assistant gesendet, sondern vom UniFi-Gateway (getestet mit einem UCG Fiber, gedacht für alle UniFi-OS-Gateways wie UCG Ultra/Max oder UDM) direkt auf dem Interface des Netzwerks, in dem der Client zuletzt war.
 
+![Geräteseite mit Aufweck-Button und Online-Sensor](https://raw.githubusercontent.com/chriscomputerfreak/unifi-wake-on-lan/main/docs/images/device-page.png)
+
+![Integrationsseite](https://raw.githubusercontent.com/chriscomputerfreak/unifi-wake-on-lan/main/docs/images/integration-page.png)
+
 ## Wie es funktioniert
 
 1. Über die UniFi-Network-API (nur lesend) holt die Integration Clients (aktiv + Historie) und Netzwerke (Subnetz/VLAN).
